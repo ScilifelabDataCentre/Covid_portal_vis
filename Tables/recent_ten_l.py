@@ -11,9 +11,8 @@ req = requests.get("https://publications-covid19.scilifelab.se/publications.json
 data = req.json()
 
 # keep 10 most recent, with date today or earlier
-#pubs = [pub for pub in data["publications"] if datetime.date.fromisoformat(pub["published"]) <= datetime.date.today()]
 today = str(datetime.date.today())
-pubs = [pub for pub in data["publications"] if pub["published"] < today]
+pubs = [pub for pub in data["publications"] if pub["published"] <= today]
 recent = sorted(pubs, key=lambda x: x["published"], reverse=True)[:10]
 
 # collapse authors
