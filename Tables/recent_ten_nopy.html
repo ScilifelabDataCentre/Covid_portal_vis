@@ -1,0 +1,54 @@
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+<div>
+  <table id="topTenPubTable" class="table table-striped">
+    <thead>
+      <tr>
+        <th scope="col">Published</th>
+        <th scope="col">Authors</th>
+        <th scope="col">Title</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<script type="text/javascript"> 
+  Plotly.d3.json("https://publications-covid19.scilifelab.se/publications.json", function(error, dyndata) {
+    let publications = []
+    let today = new Date().toISOString();
+    today = today.slice(0, today.indexOf("T"))
+    dyndata.publications.forEach(function (pub) {
+      if (pub.published <= today) {
+        let tmpPub = {"title": pub.title, "published": pub.published, "authors": pub.authors}
+        publications.push(tmpPub)
+      }
+    });
+    publications.sort((a, b) => a.published >= b.published);
+    publications = publications.slice(0, 10);
+    publications.forEach(function (pub) {
+      if (pub.authors.length == 1)
+          pub.authors = pub.authors[0].family
+        else if (pub.authors.length == 2)
+          pub.authors = pub.authors[0].family + " and " + pub.authors[1].family
+        else
+          pub.authors = pub.authors[0].family + " et al."
+    });
+    let tbody = document.getElementById("topTenPubTable").getElementsByTagName('tbody')[0];
+    publications.forEach(function (item) {
+      let row = tbody.insertRow();
+      let td = row.insertCell();
+      td.textContent = item.published;
+      td = row.insertCell();
+      td.textContent = item.authors;
+      td = row.insertCell();
+      let doiLink = document.createElement("a");
+      doiLink.href = "https://doi.org/" + item.doi;
+      doiLink.text = item.title;
+      td.appendChild(doiLink);
+    });
+  });
+</script>
