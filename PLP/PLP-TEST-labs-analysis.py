@@ -1,116 +1,147 @@
 """
-Plotting code for mock-up visualisations for the 'phase-based' comparison.
-
-Unnatural in that real data would not arrive in this fashion (outside a simulation).
-Also, as this was more about mocking up the kinds of plots that could exist,
-the Identified Pathogen data is mocked, rather than being extracted from a file.
+Plotting code for outcome visualisations of the PLP Test project.
 """
-from collections import Counter
-from pathlib import Path
+
 
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.graph_objs
+import plotly.express as px
 
 
-DATA_DIR = Path("./data")
-"""Path to directory containing the 6 Excel files, one per lab"""
+# Read CSV files into a DataFrames
+# analysis_logs_P1 = pd.read_csv(
+#     "https://blobserver.dc.scilifelab.se/blob/PLP-TEST-aggregated-data-phase-1.csv",
+#     header=0,
+# )
+data = pd.read_csv(
+    "https://blobserver.dc.scilifelab.se/blob/PLP-TEST-aggregated-data-phase-1.csv",
+    header=0,
+)
+
+analysis_logs_P2 = pd.read_csv(
+    "https://blobserver.dc.scilifelab.se/blob/PLP-TEST-aggregated-data-phase-2.csv",
+    header=0,
+)
 
 
-def identified_pathogen_data() -> dict:
-    """
-    Mocks getting the lab name from the file name and the pathogen from the 'Identified pathogen' field
-    """
-    return {
-        "A": "Unknown",
-        "B": "Christensenella hongkongensis",
-        "C": "Catabacter Hongkongensis",
-        "D": "Unknown",
-        "E": "Unknown",
-        "F": "Unknown",
+# Data preprocessing
+# Convert Date column to datetime
+data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+
+# Filter out rows with missing dates since they are critical for the timeline
+filtered_data = data.dropna(subset=['Date'])
+
+# Group data by Lab and Date to count the number of stages
+grouped_data = filtered_data.groupby(['Lab', 'Date']).size().reset_index(name='Stage_Count')
+
+# Merge the stage count back into the original data for visualisation
+filtered_data = filtered_data.merge(grouped_data, on=['Lab', 'Date'])
+
+
+# Create a scatter plot
+fig = px.scatter(
+    filtered_data,
+    x='Date',
+    y='Lab',
+    color='Stage',
+    size='Stage_Count',
+    title='Lab Activity Timeline',
+    labels={'Date': 'Date', 'Lab': 'Lab ID'},
+    hover_data=['Method', 'Comment', 'Stage_Count']
+)
+
+# Customise layout
+fig.update_layout(
+    plot_bgcolor="white",
+    # legend_title="Stage",
+    # yaxis=dict(tickmode='linear')
+)
+
+# Customise axis properties
+fig.update_xaxes(
+    title="<b>Date</b>",
+    linecolor="black",
+)
+
+fig.update_yaxes(
+    title="<b>Lab ID</b>",
+    linecolor="black",
+    showgrid=True,
+    gridcolor="lightgrey",
+    zeroline=True,
+    zerolinecolor="black",
+)
+
+# Display the graph
+# fig.show()
+
+# Save figure to JSON file
+# pio.write_json(fig, "weekly_serology_tests.json")
+
+# Convert figure to JSON string and print it to stdout
+# print(pio.to_json(fig))
+
+
+
+
+# PHASE 2
+
+import plotly.figure_factory as ff
+import plotly.colors as pc
+
+# Load the data
+data_phase_2 = pd.read_csv( 'https://blobserver.dc.scilifelab.se/blob/PLP-TEST-aggregated-data-phase-2.csv')
+
+
+# Data preprocessing: Consolidate datetime conversion and missing value handling
+data_phase_2['Start date'] = pd.to_datetime(data_phase_2['Start date'], errors='coerce')
+data_phase_2['End date'] = pd.to_datetime(data_phase_2['End date'], errors='coerce').fillna(data_phase_2['Start date'])
+
+# Adjust end date to ensure visibility for tasks with same start and end date
+data_phase_2['Adjusted End date'] = data_phase_2['End date']
+data_phase_2.loc[
+    data_phase_2['Start date'] == data_phase_2['End date'],
+    'Adjusted End date'
+] += pd.Timedelta(days=1)
+
+# Prepare data for the Gantt chart
+gantt_data = [
+    {
+        'Task': f"{row['Stage']}",
+        'Start': row['Start date'],
+        'Finish': row['Adjusted End date'],
+        'Resource': f"Lab {row['Lab']}"
     }
+    for _, row in data_phase_2.iterrows()
+]
 
+# Identify all unique labs
+unique_labs = data_phase_2['Lab'].unique()
 
-def identified_bar_plots(input_data: dict) -> plotly.graph_objs.Figure:
-    """
-    Creates bar plot showing the counts of IDed pathogens
-    """
-    counts = Counter(input_data.values())
+# Ensure sufficient colors by extending the color palette only when necessary
+if len(unique_labs) > len(pc.qualitative.Plotly):
+    colors = pc.qualitative.Plotly * (len(unique_labs) // len(pc.qualitative.Plotly) + 1)
+else:
+    colors = pc.qualitative.Plotly
 
-    fig = go.Figure(data=[
-        go.Bar(
-            x=list(counts.keys()),
-            y=list(counts.values()),
-            marker=dict(color=list(range(len(counts))), colorscale="Viridis")
-        )
-    ])
+# Create the Gantt chart
+fig = ff.create_gantt(
+    gantt_data,
+    index_col='Resource',
+    show_colorbar=True,
+    group_tasks=True,
+    title="Stage Duration Analysis (Phase 2)",
+    showgrid_x=True,
+    showgrid_y=True,
+    colors=colors[:len(unique_labs)]
+)
 
-    fig.update_layout(
-        title="Phase 2: Identified pathogens",
-        xaxis_title="Pathogen",
-        yaxis_title="Count",
-        template="plotly_white"
-    )
-    return fig
+# Customize the layout
+fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Tasks",
+    plot_bgcolor="white",
+    title_font_size=16
+)
 
-
-def extract_method(file_path, lab_name) -> pd.DataFrame:
-    df = pd.read_excel(file_path, sheet_name="Fas 2", skiprows=6)
-    df["Lab"] = lab_name
-    return df
-
-
-def create_analysis_timeline() -> plotly.graph_objs.Figure:
-    """
-    Creates a timeline showing the timeline of conducted analyses for 2 labs
-    """
-    df1 = extract_method(DATA_DIR / "B.xlsx", "B")
-    df2 = extract_method(DATA_DIR / "C.xlsx","C")
-    df = pd.concat([df1, df2], ignore_index=True)
-    df["Start date"] = pd.to_datetime(df["Start date"])
-
-    fig = go.Figure()
-    for lab in df["Lab"].unique():
-        lab_data = df[df["Lab"] == lab]
-        fig.add_trace(
-            go.Scatter(
-                x=lab_data["Start date"],
-                y=lab_data["Lab"],
-                mode="markers+lines",
-                marker=dict(size=40),
-                text=lab_data["Metod"],  # Hover text
-                hoverinfo="text",
-                name=lab
-            )
-        )
-
-    # Update layout to reduce whitespace and add buffer
-    fig.update_layout(
-        title="Analysis timeline",
-        xaxis_title="Start date",
-        yaxis_title="Lab",
-        xaxis=dict(
-            type="date",
-            tickformat="%Y-%m-%d",
-            tickangle=-45
-        ),
-        yaxis=dict(
-            title="Labs",
-            automargin=True,
-            categoryorder="array",
-            categoryarray=["B", "C"],
-            range=[-0.5, len(df["Lab"].unique()) - 0.5]
-        ),
-        template="plotly_white",
-        showlegend=True
-    )
-    return fig
-
-
-data = identified_pathogen_data()
-bar_plot = identified_bar_plots(data)
-bar_plot.show()
-
-timeline_plot = create_analysis_timeline()
-timeline_plot.show()
-
+# Show the Gantt chart
+fig.show()
