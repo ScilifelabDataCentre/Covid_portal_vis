@@ -104,22 +104,23 @@ data_phase_2.loc[
 ] += pd.Timedelta(days=1)
 
 # Prepare data for the Gantt chart
-gantt_data = [
-    {
-        'Task': f"{row['Stage']}",
-        'Start': row['Start date'],
-        'Finish': row['Adjusted End date'],
-        'Resource': f"Lab {row['Lab']}"
-    }
-    for _, row in data_phase_2.iterrows()
-]
+gantt_data = []
+for lab in data_phase_2['Lab'].unique():
+    lab_data = data_phase_2[data_phase_2['Lab'] == lab]
+    for i, (_, row) in enumerate(lab_data.iterrows()):
+        gantt_data.append({
+            'Task': f"Lab {lab}" if i == 0 else "",  # Display "Lab N" once for the first stage
+            'Start': row['Start date'],
+            'Finish': row['Adjusted End date'],
+            'Resource': f"Lab {lab}"
+        })
 
-# Identify all unique labs
-unique_labs = data_phase_2['Lab'].unique()
+# Identify all unique labs and stages for color assignment
+unique_resources = [f"Lab {lab}" for lab in data_phase_2['Lab'].unique()]
 
 # Ensure sufficient colors by extending the color palette only when necessary
-if len(unique_labs) > len(pc.qualitative.Plotly):
-    colors = pc.qualitative.Plotly * (len(unique_labs) // len(pc.qualitative.Plotly) + 1)
+if len(unique_resources) > len(pc.qualitative.Plotly):
+    colors = pc.qualitative.Plotly * (len(unique_resources) // len(pc.qualitative.Plotly) + 1)
 else:
     colors = pc.qualitative.Plotly
 
@@ -128,11 +129,11 @@ fig = ff.create_gantt(
     gantt_data,
     index_col='Resource',
     show_colorbar=True,
-    group_tasks=True,
+    group_tasks=False,
     title="Stage Duration Analysis (Phase 2)",
     showgrid_x=True,
     showgrid_y=True,
-    colors=colors[:len(unique_labs)]
+    colors=colors[:len(unique_resources)]
 )
 
 # Customize the layout
@@ -140,7 +141,8 @@ fig.update_layout(
     xaxis_title="Date",
     yaxis_title="Tasks",
     plot_bgcolor="white",
-    title_font_size=16
+    title_font_size=16,
+    yaxis=dict(autorange="reversed")
 )
 
 # Show the Gantt chart
